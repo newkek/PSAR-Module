@@ -1,3 +1,5 @@
+#include "ibs_measure_module.h"
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/hrtimer.h>

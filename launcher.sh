@@ -20,7 +20,8 @@ elif [ "$1" == "-h" ] || [ "$1" == "help" ]; then
   echo "$0   [-a|add]   : add kernel module
                 [-d|del]   : delete kernel module
                 [-c|clean] : make clean
-                [-h|help]  : print this message"
+                [-h|help]  : print this message
+default behavior: make"
 else
   make
 fi

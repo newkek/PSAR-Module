@@ -1,9 +1,13 @@
-KVER=$(shell uname -r)
+KVER = $(shell uname -r)
+PWD  = $(shell pwd)
+KDIR = /lib/modules/$(KVER)/build
 
-obj-m += ibs_measure_module.o
+obj-m := ibs_measure_module.o
+ibs_measure_module-y := src/ibs_measure_module.o
+ccflags-y := -I$(src)/include
 
 all:
-	make -C /lib/modules/$(KVER)/build M=$(PWD) modules
+	make -C $(KDIR) M=$(PWD) modules
 
 clean:
-	make -C /lib/modules/$(KVER)/build M=$(PWD) clean
+	make -C $(KDIR) M=$(PWD) clean
