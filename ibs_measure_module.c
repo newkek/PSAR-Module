@@ -24,7 +24,6 @@ static struct cpumask dst;
 void (*cpuset_cpus_allowed)(struct task_struct *p, struct cpumask *mask);
 
 
-
 enum hrtimer_restart my_hrtimer_callback( struct hrtimer *timer )
 {
   printk("Callback Timer \n");
