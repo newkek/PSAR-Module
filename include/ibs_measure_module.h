@@ -1,7 +1,7 @@
 #ifndef _H_IBS_MEASURE_MODULE_
 #define _H_IBS_MEASURE_MODULE_
 
-#include <linux/types.h>
+#include <linux/kernel.h>
 
 #define MS_TO_NS(x)                    (x * 1E6L)
 
@@ -91,6 +91,7 @@ struct ibs_op_sample {
   };
 };
 
+static int handle_ibs_nmi(struct pt_regs* const regs);
 
 #endif /* _H_IBS_MEASURE_MODULE_ */
 
