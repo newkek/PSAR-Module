@@ -246,6 +246,9 @@ static struct notifier_block ibs_cpu_nb = {
 
 static int thecpu;
 
+static inline void apic_write_NMI (void *args){
+  apic_write(APIC_LVTPC, APIC_DM_NMI);
+}  
 
 
 /* the big work */
@@ -262,16 +265,22 @@ void ibs_start(void)
   per_cpu(saved_lvtpc, cpu) = apic_read(APIC_LVTPC);
 
   register_cpu_notifier(&ibs_cpu_nb);
+printk("notifier registered \n");
   
   register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, __this_module.name);
 printk("Handler registered\n");
-  apic_write(APIC_LVTPC, APIC_DM_NMI);
 
-  apic_init_ibs_nmi_per_cpu(NULL);
+  on_each_cpu(apic_write_NMI, NULL, 1);
+printk("apic NMI wrote\n");
+
+  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
 printk("APIC_init_ibs_nmi_per_cpu done\n");
+
   pfm_amd64_setup_eilvt();
 printk("pfm done\n");
-  set_ibs_rate(NULL);
+
+  on_each_cpu(set_ibs_rate, NULL, 1);
+printk("ibs started\n");
 
   /* Enable NMI by writing on APIC_LVTPC register */
   /* Init notifier. TODO: check if it's useless */
@@ -334,14 +343,17 @@ printk("__stop done\n");
  
 printk("__shutdown done\n");
  
-  /* Unregister NMI_LOCAL */
-  unregister_nmi_handler(NMI_LOCAL, __this_module.name);
-printk("handler unregistered \n");
   /* Shutdown APIC on each CPU */
   //on_each_cpu(my_shutdown_apic, NULL, 1);
   smp_call_function_single(thecpu, my_shutdown_apic, NULL, 0);
 printk("my shutdown apic done\n");
-  /* Unregister CPU notifier */
+ 
+  /* Unregister NMI_LOCAL */
+  unregister_nmi_handler(NMI_LOCAL, __this_module.name);
+printk("handler unregistered \n");
+ 
+
+ /* Unregister CPU notifier */
   unregister_cpu_notifier(&ibs_cpu_nb);
 printk("Out\n");
 }
