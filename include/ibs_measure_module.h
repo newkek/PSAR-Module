@@ -7,7 +7,7 @@
 #define APIC_EILVT0                    0x500
 
 
-int thread_fn(void* args);
+//int thread_fn(void* args);
 
 #endif /* _H_IBS_MEASURE_MODULE_ */
 

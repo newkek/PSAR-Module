@@ -337,15 +337,15 @@ void ibs_stop(void)
   cpu = smp_processor_id();
 
 
-  smp_call_function_single(thecpu, __stop_MSR, NULL, 0);
+  on_each_cpu(__stop_MSR, NULL, 1);
 printk("__stop done\n");
-  smp_call_function_single(thecpu, __shutdown_APIC, NULL, 0);
- 
+
+  on_each_cpu(__shutdown_APIC, NULL, 1); 
 printk("__shutdown done\n");
  
   /* Shutdown APIC on each CPU */
   //on_each_cpu(my_shutdown_apic, NULL, 1);
-  smp_call_function_single(thecpu, my_shutdown_apic, NULL, 0);
+  on_each_cpu(my_shutdown_apic, NULL, 1);
 printk("my shutdown apic done\n");
  
   /* Unregister NMI_LOCAL */
@@ -356,6 +356,7 @@ printk("handler unregistered \n");
  /* Unregister CPU notifier */
   unregister_cpu_notifier(&ibs_cpu_nb);
 printk("Out\n");
+
 }
 
 
