@@ -90,7 +90,7 @@ struct ibs_op_sample {
   };
 };
 
-static int handle_ibs_nmi(struct pt_regs* const regs);
+//static int handle_ibs_nmi(struct pt_regs* const regs);
 
 void ibs_start(void);
 void ibs_stop(void);

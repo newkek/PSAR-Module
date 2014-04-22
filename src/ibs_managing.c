@@ -10,8 +10,7 @@
 
 static DEFINE_PER_CPU(unsigned long, saved_lvtpc);
 
-void
-my_shutdown_apic_wesh(void* args)
+void my_shutdown_apic(void* args)
 {
   u8 lvt_off = APIC_EILVT_LVTOFF_IBS;
   u8 mask = 1;
@@ -24,115 +23,10 @@ my_shutdown_apic_wesh(void* args)
   return;
 }
 
-/* This function initialize IBS by writing values on MSR registers */
-void set_ibs_rate(void *args)
-{
-  unsigned int low, high;
-  uint32_t rand = 0;
 
-  /* value for IbsOpCntCtl bit */
-  low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) + ((1 & 0x1) << 19) \
-    + IBS_OP_LOW_ENABLE;
-  high = 0;
-
-  /* Write on MSR CTL register */
-  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-}
-
-static inline void
-apic_init_ibs_nmi_per_cpu (void * args)
-{
-  unsigned long reg;
-  unsigned int  v;
-  /* TODO: understand this two lines */
-  /* Really.. ? */
-  reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
-  v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
-  /* Write v on apic register */
-  apic_write(reg, v);
-}
-
-/* Is this function  must return NOTIFY_DONE ? */
-static int
-ibs_cpu_notifier(struct notifier_block *b, unsigned long action, void *data)
-{
-  printk("ibs_cpu_notifier called\n");
-  return NOTIFY_DONE;
-}
-
-/* 
- * Init function for notifier_call 
- * This structure is defined in the kernel 
- */
-static struct notifier_block ibs_cpu_nb = {
-  .notifier_call = ibs_cpu_notifier
-};
-
-void
-ibs_start(void)
-{
-  int cpu;
-
-  cpu = smp_processor_id();
-
-  /* Init apic on all CPU */
-  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-
-  per_cpu(saved_lvtpc, cpu) = apic_read(APIC_LVTPC);
-
-  /* Enable NMI by writing on APIC_LVTPC register */
-  apic_write(APIC_LVTPC, APIC_DM_NMI);
-  /* Init notifier. TODO: check if it's useless */
-  register_cpu_notifier(&ibs_cpu_nb);
-  /* Register handler */
-  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, __this_module.name);
-  /* Start measures */
-  on_each_cpu(set_ibs_rate, NULL, 1);  
-
-  return;
-}
-
-/* This function stop IBS sampling by writing on MSR registers */
-void
-ibs_stop(void)
-{
-  unsigned int low, high;
-
-  /* Les APIC */
-  unsigned int v;
-  int cpu ;
-
-  /* Disable all bits */
-  low = high = 0;
-  /* Write on MSR CTL register */
-  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-
-  cpu = smp_processor_id();
-
-  /* restoring APIC_LVTPC can trigger an apic error because the delivery
-   * mode and vector nr combination can be illegal. That's by design: on
-   * power on apic lvt contain a zero vector nr which are legal only for
-   * NMI delivery mode. So inhibit apic err before restoring lvtpc
-   */
-  v = apic_read(APIC_LVTERR);
-  apic_write(APIC_LVTERR, v | APIC_LVT_MASKED);
-  apic_write(APIC_LVTPC, per_cpu(saved_lvtpc, cpu));
-  apic_write(APIC_LVTERR, v);
-
-  /* Unregister NMI_LOCAL */
-  unregister_nmi_handler(NMI_LOCAL, __this_module.name);
-
-  /* Shutdown APIC on each CPU */
-  on_each_cpu(my_shutdown_apic_wesh, NULL, 1);
-
-  /* Unregister CPU notifier */
-  unregister_cpu_notifier(&ibs_cpu_nb);
-
-}
 
 /* This function will be called on every interruption */
-static int
-handle_ibs_nmi(struct pt_regs* const regs)
+static int handle_ibs_nmi(struct pt_regs* const regs)
 {
   int cpu;
   int consider_L1L2;
@@ -220,3 +114,144 @@ handle_ibs_nmi(struct pt_regs* const regs)
 
   return 1;
 }
+
+
+
+
+
+/* This function initialize IBS by writing values on MSR registers */
+void set_ibs_rate(void *args)
+{
+  unsigned int low, high;
+  uint32_t rand = 0;
+
+  /* value for IbsOpCntCtl bit */
+  low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) + ((1 & 0x1) << 19) \
+    + IBS_OP_LOW_ENABLE;
+  high = 0;
+
+  /* Write on MSR CTL register */
+  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
+}
+
+
+
+
+
+
+static inline void apic_init_ibs_nmi_per_cpu (void * args)
+{
+  unsigned long reg;
+  unsigned int  v;
+  /* TODO: understand this two lines */
+  /* Really.. ? */
+  reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
+  v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
+  /* Write v on apic register */
+  apic_write(reg, v);
+}
+
+
+
+
+
+/* Does this function have to return NOTIFY_DONE ? */
+static int ibs_cpu_notifier(struct notifier_block *b, unsigned long action, void *data)
+{
+  printk("ibs_cpu_notifier called\n");
+  return NOTIFY_DONE;
+}
+
+
+
+
+
+
+/* 
+ * Init function for notifier_call 
+ * This structure is defined in the kernel 
+ */
+static struct notifier_block ibs_cpu_nb = {
+  .notifier_call = ibs_cpu_notifier
+};
+
+
+
+
+
+
+
+
+/* the big work */
+void ibs_start(void)
+{
+  int cpu;
+
+  cpu = smp_processor_id();
+
+  /* Init apic on all CPU */
+  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+
+  per_cpu(saved_lvtpc, cpu) = apic_read(APIC_LVTPC);
+
+  /* Enable NMI by writing on APIC_LVTPC register */
+  apic_write(APIC_LVTPC, APIC_DM_NMI);
+  /* Init notifier. TODO: check if it's useless */
+  register_cpu_notifier(&ibs_cpu_nb);
+  /* Register handler */
+  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, __this_module.name);
+  /* Start measures */
+  on_each_cpu(set_ibs_rate, NULL, 1);  
+
+  return;
+}
+
+
+
+
+
+
+
+/* This function stop IBS sampling by writing on MSR registers */
+void ibs_stop(void)
+{
+  unsigned int low, high;
+
+  /* Les APIC */
+  unsigned int v;
+  int cpu ;
+
+  /* Disable all bits */
+  low = high = 0;
+  /* Write on MSR CTL register */
+  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
+
+  cpu = smp_processor_id();
+
+  /* restoring APIC_LVTPC can trigger an apic error because the delivery
+   * mode and vector nr combination can be illegal. That's by design: on
+   * power on apic lvt contain a zero vector nr which are legal only for
+   * NMI delivery mode. So inhibit apic err before restoring lvtpc
+   */
+  v = apic_read(APIC_LVTERR);
+  apic_write(APIC_LVTERR, v | APIC_LVT_MASKED);
+  apic_write(APIC_LVTPC, per_cpu(saved_lvtpc, cpu));
+  apic_write(APIC_LVTERR, v);
+
+  /* Unregister NMI_LOCAL */
+  unregister_nmi_handler(NMI_LOCAL, __this_module.name);
+
+  /* Shutdown APIC on each CPU */
+  on_each_cpu(my_shutdown_apic, NULL, 1);
+
+  /* Unregister CPU notifier */
+  unregister_cpu_notifier(&ibs_cpu_nb);
+
+}
+
+
+
+
+
+
+
