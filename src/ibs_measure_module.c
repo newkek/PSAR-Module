@@ -283,7 +283,7 @@ printk("pfm done\n");
 }
 
 
-static int __stop_MSR(void* args){
+static void __stop_MSR(void* args){
 
   unsigned int low, high;
 
@@ -292,14 +292,14 @@ static int __stop_MSR(void* args){
   high = 0;
   /* Write on MSR CTL register */
   wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-  return 0;
+  return ;
 }
 
 
 
 
 
-static int __shutdown_APIC (void* args){
+static void __shutdown_APIC (void* args){
  /* restoring APIC_LVTPC can trigger an apic error because the delivery
  * mode and vector nr combination can be illegal. That's by design: on
  * power on apic lvt contain a zero vector nr which are legal only for
@@ -312,7 +312,7 @@ static int __shutdown_APIC (void* args){
   apic_write(APIC_LVTERR, v | APIC_LVT_MASKED);
   apic_write(APIC_LVTPC, per_cpu(saved_lvtpc, cpu));
   apic_write(APIC_LVTERR, v);
-  return 0;
+  return ;
 }
   
 
