@@ -7,7 +7,8 @@
 #include <asm/nmi.h>
 #include <asm/apic.h>
 #include <linux/kthread.h>
-
+#include <linux/nmi.h>
+#include <linux/pci.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kévin Gallardo - Pierre-Yves Péneau");
@@ -164,6 +165,62 @@ static inline void apic_init_ibs_nmi_per_cpu (void * args)
 }
 
 
+
+
+int pfm_amd64_setup_eilvt(void)
+{
+#  define IBSCTL_LVTOFFSETVAL		(1 << 8)
+#  define IBSCTL				0x1cc
+   struct pci_dev *cpu_cfg;
+   int nodes;
+   u32 value = 0;
+
+   /* per CPU setup */
+//   on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+
+   nodes = 0;
+   cpu_cfg = NULL;
+   do {
+      cpu_cfg = pci_get_device(PCI_VENDOR_ID_AMD,
+            PCI_DEVICE_ID_AMD_10H_NB_MISC,
+            cpu_cfg);
+      if (!cpu_cfg)
+         break;
+      ++nodes;
+      pci_write_config_dword(cpu_cfg, IBSCTL, IBSCTL_LVTOFFSETVAL
+            | IBSCTL_LVTOFFSETVAL);
+      pci_read_config_dword(cpu_cfg, IBSCTL, &value);
+      if (value !=  IBSCTL_LVTOFFSETVAL) {
+         printk(KERN_DEBUG "Failed to setup IBS LVT offset, "
+               "IBSCTL = 0x%08x\n", value);
+         return 1;
+      }
+   } while (1);
+
+   if (!nodes) {
+      printk(KERN_DEBUG "No CPU node configured for IBS\n");
+      return 1;
+   }
+
+#ifdef CONFIG_NUMA
+   /* Sanity check */
+   /* Works only for 64bit with proper numa implementation. */
+   if (nodes != num_possible_nodes()) {
+      printk(KERN_DEBUG "Failed to setup CPU node(s) for IBS, "
+            "found: %d, expected %d\n",
+            nodes, num_possible_nodes());
+      return 1;
+   }
+#endif
+   return 0;
+}
+
+
+
+
+
+
+
 /* Does this function have to return NOTIFY_DONE ? */
 static int ibs_cpu_notifier(struct notifier_block *b, unsigned long action, void *data)
 {
@@ -187,7 +244,7 @@ static struct notifier_block ibs_cpu_nb = {
 
 
 
-
+static int thecpu;
 
 
 
@@ -197,70 +254,97 @@ void ibs_start(void)
   int cpu;
 
   cpu = smp_processor_id();
-
+  thecpu = cpu;
   /* Init apic on all CPU */
-  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+  //on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+  
 
   per_cpu(saved_lvtpc, cpu) = apic_read(APIC_LVTPC);
 
-  /* Enable NMI by writing on APIC_LVTPC register */
-  apic_write(APIC_LVTPC, APIC_DM_NMI);
-  /* Init notifier. TODO: check if it's useless */
   register_cpu_notifier(&ibs_cpu_nb);
+  
+  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, __this_module.name);
+printk("Handler registered\n");
+  apic_write(APIC_LVTPC, APIC_DM_NMI);
+
+  apic_init_ibs_nmi_per_cpu(NULL);
+printk("APIC_init_ibs_nmi_per_cpu done\n");
+  pfm_amd64_setup_eilvt();
+printk("pfm done\n");
+  set_ibs_rate(NULL);
+
+  /* Enable NMI by writing on APIC_LVTPC register */
+  /* Init notifier. TODO: check if it's useless */
   /* Register handler */
-  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "IBSMODULE");
   /* Start measures */
-  on_each_cpu(set_ibs_rate, NULL, 1);
+  //on_each_cpu(set_ibs_rate, NULL, 1);
 
   return;
 }
 
+
+static int __stop_MSR(void* args){
+
+  unsigned int low, high;
+
+  /* Disable all bits */
+  low = 0;
+  high = 0;
+  /* Write on MSR CTL register */
+  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
+  return 0;
+}
+
+
+
+
+
+static int __shutdown_APIC (void* args){
+ /* restoring APIC_LVTPC can trigger an apic error because the delivery
+ * mode and vector nr combination can be illegal. That's by design: on
+ * power on apic lvt contain a zero vector nr which are legal only for
+ * NMI delivery mode. So inhibit apic err before restoring lvtpc
+ */
+  unsigned int v;
+  int cpu ;
+  cpu = smp_processor_id();
+  v = apic_read(APIC_LVTERR);
+  apic_write(APIC_LVTERR, v | APIC_LVT_MASKED);
+  apic_write(APIC_LVTPC, per_cpu(saved_lvtpc, cpu));
+  apic_write(APIC_LVTERR, v);
+  return 0;
+}
+  
 
 
 
 /* This function stop IBS sampling by writing on MSR registers */
 void ibs_stop(void)
 {
-  unsigned int low, high;
-
+  //unsigned int low, high;
+  int cpu;
   /* Les APIC */
-  unsigned int v;
-  int cpu ;
-
-  /* Disable all bits */
-  low = high = 0;
-  /* Write on MSR CTL register */
-  wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-
+  //unsigned int v;
   cpu = smp_processor_id();
 
-  /* restoring APIC_LVTPC can trigger an apic error because the delivery
-   * mode and vector nr combination can be illegal. That's by design: on
-   * power on apic lvt contain a zero vector nr which are legal only for
-   * NMI delivery mode. So inhibit apic err before restoring lvtpc
-   */
-  v = apic_read(APIC_LVTERR);
-  apic_write(APIC_LVTERR, v | APIC_LVT_MASKED);
-  apic_write(APIC_LVTPC, per_cpu(saved_lvtpc, cpu));
-  apic_write(APIC_LVTERR, v);
 
+  smp_call_function_single(thecpu, __stop_MSR, NULL, 0);
+printk("__stop done\n");
+  smp_call_function_single(thecpu, __shutdown_APIC, NULL, 0);
+ 
+printk("__shutdown done\n");
+ 
   /* Unregister NMI_LOCAL */
   unregister_nmi_handler(NMI_LOCAL, __this_module.name);
-
+printk("handler unregistered \n");
   /* Shutdown APIC on each CPU */
-  on_each_cpu(my_shutdown_apic, NULL, 1);
-
+  //on_each_cpu(my_shutdown_apic, NULL, 1);
+  smp_call_function_single(thecpu, my_shutdown_apic, NULL, 0);
+printk("my shutdown apic done\n");
   /* Unregister CPU notifier */
   unregister_cpu_notifier(&ibs_cpu_nb);
-
+printk("Out\n");
 }
-
-
-
-
-
-
-
 
 
 
