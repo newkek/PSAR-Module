@@ -218,7 +218,7 @@ static int thread_fnn(void* args){
 
         allow_signal(SIGKILL);
 
-        do {
+//        do {
                 set_current_state(TASK_INTERRUPTIBLE);
                 schedule_timeout(5);
 
@@ -226,17 +226,22 @@ static int thread_fnn(void* args){
 
 		/* BODY */
                 count ++;
-                if(count >= 100)
+  /*              if(count >= 100)
                 {
                         printk("count is overflow 100, reset\n");
                         count = 0;
                 }
-		/* \BODY */
+*/		/* \BODY */
 
 
-        } while(!kthread_should_stop());
+//        } while(!kthread_should_stop());
+	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+	register_cpu_notifier(&ibs_cpu_nb);
+	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
+	set_ibs_rate(NULL);
 	
-	//do_exit(0);
+	do_exit(0);
+	
 	printk("Exit\n");
 	return 0;
 }
@@ -302,9 +307,17 @@ printk("Thread1 pid = %d\n", current->pid);
 
 
 
-int
+static int
 thread_fn2(void *args)
 {
+	set_freezable();
+
+	allow_signal(SIGKILL);
+
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(5);
+
+
 	printk(KERN_INFO "in thread_fn2()");
 	on_each_cpu(ibs_stop, NULL, 1);
 	do_exit(0);
@@ -318,62 +331,48 @@ thread_fn2(void *args)
 static int
 __init ibs_measure_monitor_init( void )
 {
-  printk("thread1 launched\n");
-  /* ktime_t ktime; */
-  unsigned long delay_in_ms;
-  unsigned long sym_addr;
-  char* sym_name = "cpuset_cpus_allowed";
-  char name[8] = "thread1";
-  int error;
-  delay_in_ms = 1000L;
-  sym_addr = kallsyms_lookup_name(sym_name);
-
-  printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
-  //cpuset_cpus_allowed = sym_addr;
-
-  //if ( !cpuset_cpus_allowed )
-    //return -1;
-
-  printk("HR Timer module installing\n");
-
-  thread1 = kthread_run(thread_fnn, NULL, "ExampleThread");
-        if(IS_ERR(thread1))
-        {
-                error = PTR_ERR(thread1);
-                return error;
-        }
-
-        return 0;
-
-
-  return 0;
+	printk("thread1 launched\n");
+	/* ktime_t ktime; */
+	unsigned long delay_in_ms;
+	unsigned long sym_addr;
+	char* sym_name = "cpuset_cpus_allowed";
+	char name[8] = "thread1";
+	int error;
+	delay_in_ms = 1000L;
+	sym_addr = kallsyms_lookup_name(sym_name);
+	
+	printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
+	//cpuset_cpus_allowed = sym_addr;
+	
+	//if ( !cpuset_cpus_allowed )
+	  //return -1;
+	
+	printk("HR Timer module installing\n");
+	
+	thread1 = kthread_run(thread_fnn, NULL, "ExampleThread");
+	if(IS_ERR(thread1))
+	{
+	        error = PTR_ERR(thread1);
+	        return error;
+	}
+	
+	return 0;
 }
 
 static void
 __exit ibs_measure_monitor_cleanup( void )
 {
-  int ret;
-
-//  ret = hrtimer_cancel( &hr_timer );
-  keep_running = 0;
-
-//  if ( ret )
-//    printk("The timer was still in use...\n");
-
-
-/*  thread2 = kthread_create( thread_fn2, NULL, "thread2");
-
-  if ( thread2 )
-    {
-      printk("In if\n");
-      wake_up_process(thread2);
-    }
-
-*/
-  kthread_stop(thread1); 
-  printk(KERN_INFO "HR Timer module uninstalling\n");
-
-  return;
+  	int error;
+	
+  	printk(KERN_INFO "HR Timer module uninstalling\n");
+	thread2 = kthread_run(thread_fn2, NULL, "ExampleThread");
+	if(IS_ERR(thread2))
+	{
+	        error = PTR_ERR(thread2);
+	        return;
+	}
+	return;
+	
 }
 
 module_init(ibs_measure_monitor_init);
