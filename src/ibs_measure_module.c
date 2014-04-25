@@ -34,6 +34,11 @@ static ktime_t kt_period;
 int keep_running;
 
 
+static char* options = "test";
+
+
+module_param(options, charp, 0000);
+MODULE_PARM_DESC(options, "Options for the numa monitoring");
 
 
 
@@ -126,7 +131,7 @@ ibs_stop(void* args)
 	unsigned int low;
 	unsigned int high;
 	
-	low = 0
+	low = 0;
 	high = 0;
 	/* clear max count and enable */
 	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
@@ -284,14 +289,16 @@ __init ibs_measure_monitor_init( void )
 	printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
 	
 	printk("HR Timer module installing\n");
-	
+/*	
 	thread1 = kthread_run(thread_fn, NULL, "ibs_monitor1");
 	if(IS_ERR(thread1))
 	{
 	        error = PTR_ERR(thread1);
 	        return error;
 	}
-	
+*/
+
+	printk(KERN_INFO "test  : %s\n", options);	
 	return 0;
 }
 
@@ -303,7 +310,7 @@ __exit ibs_measure_monitor_cleanup( void )
   	int error;
 	
   	printk(KERN_INFO "HR Timer module uninstalling\n");
-
+/*
 	thread2 = kthread_run(thread_fn2, NULL, "ibs_monitor2");
 
 	if(IS_ERR(thread2))
@@ -311,7 +318,7 @@ __exit ibs_measure_monitor_cleanup( void )
 	        error = PTR_ERR(thread2);
 	        return;
 	}
-
+*/
 	return;
 	
 }
