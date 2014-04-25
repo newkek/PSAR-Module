@@ -78,12 +78,12 @@ static struct notifier_block ibs_cpu_nb = { .notifier_call = ibs_cpu_notifier };
 
 
 int init_samples(void){
-/*	samples = create_list();
+	samples = create_list();
 	if(samples != NULL)
-*/		return 1; //successfull
-/*	return 0;
+		return 1; //successfull
+	return 0;
 
-*/
+
 }
 
 
@@ -149,7 +149,7 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 	int cpu;
 	unsigned int low;
 	unsigned int high;
-	/* struct ibs_op_sample ibs_op; */
+	struct ibs_op_sample ibs_op;
 	/* struct ibs_op_sample *ibs_op = &ibs_op_stack; */
 	
 	/* #if DUMP_OVERHEAD */
@@ -175,7 +175,7 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 		/* } */
 		/* if((ibs_op->ibs_op_data2_low & 7) == 3)  */
 		/* 	     per_cpu(stats, cpu).total_samples_L3DRAM++; */
-/*		ibs_op.ibs_op_data2_low = low; 
+		ibs_op.ibs_op_data2_low = low; 
 		ibs_op.ibs_op_data2_high = high;
 		printk("MSR_AMD64_IBSOPDATA2 %d %d\n", low, high);
 
@@ -199,13 +199,13 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 		ibs_op.ibs_dc_linear_high = high;
 		printk("MSR_AMD64_IBSOPCLINAD %d %d\n", low, high);
 	
-*/	
+	
 		/* if(ibs_op->lin_addr < min_lin_address || ibs_op->lin_addr > max_lin_address) { */
 		/* goto end; */
 	}
 	
 	
-/*	
+	
 	rdmsr(MSR_AMD64_IBSDCPHYSAD, low, high);
 	ibs_op.ibs_dc_phys_low = low; 
 	ibs_op.ibs_dc_phys_high = high;
@@ -221,11 +221,14 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 	ibs_op.ibs_br_trg_high = high;
 	printk("MSR_AMD64_IBSBRTARGET %d %d\n", low, high);
 
+	add_to_queue(samples, ibs_op);
+
+
 	rdmsr(MSR_AMD64_IBSOPCTL, low, high);
 	high = 0;
 	low &= ~IBS_OP_LOW_VALID_BIT;
 	low |= IBS_OP_LOW_ENABLE;
-*/	/* #if DUMP_OVERHEAD */
+	/* #if DUMP_OVERHEAD */
 	/* rdtscll(time_stop); */
 	/* per_cpu(stats, cpu).time_spent_in_NMI += time_stop - time_start; */
 	/* #endif */
@@ -242,8 +245,9 @@ static int
 thread_fn(void* args){
 	
 	int count = 0;
+	struct ibs_op_sample op;
+	printk("[%s] thread launcher pid : %d\n", __this_module.name, current->pid);
 
-	printk("current pid : %d\n", current->pid);
 
         set_freezable();
 
@@ -254,11 +258,27 @@ thread_fn(void* args){
 
 
 
+/*
+
 	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
 	register_cpu_notifier(&ibs_cpu_nb);
 	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
 	set_ibs_rate(NULL);
+*/	
+
+
+	/* TESTS ON LIST */	
+	op.ibs_op_rip = 2;
+	op.ibs_op_data1=323445;
 	
+	add_to_queue(samples, op);
+	
+	if(samples->next != NULL){
+		printk("results : %lld %lld \n", samples->next->sample.ibs_op_rip, samples->next->sample.ibs_op_data1);
+		kfree(samples->next);
+	}
+	
+
 	do_exit(0);
 	
 	printk("Exit\n");
@@ -308,21 +328,21 @@ __init ibs_measure_monitor_init( void )
 	printk("HR Timer module installing\n");
 
 	if(!init_samples()){
-		printk(KERN_INFO "[%s] LIST INITIALIZATION FAILED !", __this_module.name);
+		printk(KERN_INFO "[%s] LIST INITIALIZATION FAILED !\n", __this_module.name);
 		return 1;
 	}
 	else{
-		printk(KERN_INFO "[%s] LIST INITIALIZATION SUCCESSFULL", __this_module.name);
+		printk(KERN_INFO "[%s] LIST INITIALIZATION SUCCESSFULL\n", __this_module.name);
 	}
 	
-/*		
+		
 	thread1 = kthread_run(thread_fn, NULL, "ibs_monitor1");
 	if(IS_ERR(thread1))
 	{
 	        error = PTR_ERR(thread1);
 	        return error;
 	}
-*/
+
 
 	printk(KERN_INFO "test  : %s\n", options);	
 	return 0;
@@ -345,6 +365,8 @@ __exit ibs_measure_monitor_cleanup( void )
 	        return;
 	}
 */
+	if(samples != NULL)
+		kfree(samples);
 	return;
 	
 }

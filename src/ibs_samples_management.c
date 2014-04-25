@@ -5,7 +5,6 @@
 
 
 ibs_sample_list* create_list (void){
-
         ibs_sample_list* root;
         root = kmalloc(sizeof(ibs_sample_list), GFP_KERNEL);
         if(root != NULL){

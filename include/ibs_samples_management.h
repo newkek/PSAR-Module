@@ -12,7 +12,9 @@ typedef struct list{
 	struct ibs_op_sample sample;
 } ibs_sample_list;
 
-
+ibs_sample_list* create_list (void);
+void add_before(ibs_sample_list*, struct ibs_op_sample);
+void add_to_queue(ibs_sample_list*, struct ibs_op_sample);
 
 
 #endif 
