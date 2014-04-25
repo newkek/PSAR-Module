@@ -1,18 +1,5 @@
 #include "ibs_measure_module.h"
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/hrtimer.h>
-#include <linux/ktime.h>
-#include <linux/kthread.h>
-#include <linux/sched.h>
-#include <linux/kallsyms.h>
-#include <linux/cpumask.h>
-#include <asm/nmi.h>
-#include <asm/apic.h>
-#include <linux/cpu.h>
-#include <linux/freezer.h>
-
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kévin Gallardo - Pierre-Yves Péneau");
@@ -34,11 +21,14 @@ static ktime_t kt_period;
 int keep_running;
 
 
-static char* options = "test";
-
-
+static char* options = "init";
 module_param(options, charp, 0000);
 MODULE_PARM_DESC(options, "Options for the numa monitoring");
+
+
+
+ibs_sample_list* samples;
+
 
 
 
@@ -84,13 +74,17 @@ ibs_cpu_notifier(struct notifier_block* b, unsigned long action, void* data)
 	  }*/
 	return NOTIFY_DONE;
 }
-
-
-
-
 static struct notifier_block ibs_cpu_nb = { .notifier_call = ibs_cpu_notifier };
 
 
+int init_samples(void){
+/*	samples = create_list();
+	if(samples != NULL)
+*/		return 1; //successfull
+/*	return 0;
+
+*/
+}
 
 
 static inline void
@@ -99,9 +93,8 @@ apic_init_ibs_nmi_per_cpu (void* args)
 	unsigned long reg;
 	unsigned int  v;
 	
+
 	apic_write(APIC_LVTPC, APIC_DM_NMI);
-	
-	
 	
 	reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
 	v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
@@ -139,13 +132,24 @@ ibs_stop(void* args)
 }
 
 
+
+
+static inline void
+test(void* args){
+	printk("CPU : %d", smp_processor_id());
+}
+
+
+
+
+
 static int
 handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 {
 	int cpu;
 	unsigned int low;
 	unsigned int high;
-	/* struct ibs_op_sample ibs_op_stack; */
+	/* struct ibs_op_sample ibs_op; */
 	/* struct ibs_op_sample *ibs_op = &ibs_op_stack; */
 	
 	/* #if DUMP_OVERHEAD */
@@ -171,45 +175,58 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 		/* } */
 		/* if((ibs_op->ibs_op_data2_low & 7) == 3)  */
 		/* 	     per_cpu(stats, cpu).total_samples_L3DRAM++; */
+/*		ibs_op.ibs_op_data2_low = low; 
+		ibs_op.ibs_op_data2_high = high;
 		printk("MSR_AMD64_IBSOPDATA2 %d %d\n", low, high);
+
 		rdmsr(MSR_AMD64_IBSOPRIP, low, high);
-		/* ibs_op->ibs_op_rip_low = low; */
-		/* ibs_op->ibs_op_rip_high = high; */
+		ibs_op.ibs_op_rip_low = low; 
+		ibs_op.ibs_op_rip_high = high;
 		printk("MSR_AMD64_IBSOPRIP %d %d\n", low, high);
+
 		rdmsr(MSR_AMD64_IBSOPDATA, low, high);
-		/* ibs_op->ibs_op_data1_low = low; */
-		/* ibs_op->ibs_op_data1_high = high; */
+		ibs_op.ibs_op_data1_low = low;
+		ibs_op.ibs_op_data1_high = high;
 		printk("MSR_AMD64_IBSOPDATA %d %d\n", low, high);
+
 		rdmsr(MSR_AMD64_IBSOPDATA3, low, high);
-		/* ibs_op->ibs_op_data3_low = low; */
-		/* ibs_op->ibs_op_data3_high = high; */
+		ibs_op.ibs_op_data3_low = low;
+		ibs_op.ibs_op_data3_high = high;
 		printk("MSR_AMD64_IBSOPDATA3 %d %d\n", low, high);
+
 		rdmsr(MSR_AMD64_IBSDCLINAD, low, high);
-		/* ibs_op->ibs_dc_linear_low = low; */
-		/* ibs_op->ibs_dc_linear_high = high; */
+		ibs_op.ibs_dc_linear_low = low;
+		ibs_op.ibs_dc_linear_high = high;
 		printk("MSR_AMD64_IBSOPCLINAD %d %d\n", low, high);
-		rdmsr(MSR_AMD64_IBSDCPHYSAD, low, high);
-		/* ibs_op->ibs_dc_phys_low = low; */
-		/* ibs_op->ibs_dc_phys_high = high; */
-		
-		
+	
+*/	
 		/* if(ibs_op->lin_addr < min_lin_address || ibs_op->lin_addr > max_lin_address) { */
 		/* goto end; */
 	}
 	
 	
-	
+/*	
 	rdmsr(MSR_AMD64_IBSDCPHYSAD, low, high);
+	ibs_op.ibs_dc_phys_low = low; 
+	ibs_op.ibs_dc_phys_high = high;
 	printk("MSR_AMD64_IBSDCPHYSAD %d %d\n", low, high);
 
-	rdmsr(MSR_AMD64_IBSOPCTL, low, high);
-	printk("MSR_AMD64_IBSOPCTL %d %d\n", low, high);
+	rdmsr(MSR_AMD64_IBSDCLINAD, low, high);
+	ibs_op.ibs_dc_linear_low = low; 
+	ibs_op.ibs_dc_linear_high = high;
+	printk("MSR_AMD64_IBSDCLINAD %d %d\n", low, high);
+	
+	rdmsr(MSR_AMD64_IBSBRTARGET, low, high);
+	ibs_op.ibs_br_trg_low = low; 
+	ibs_op.ibs_br_trg_high = high;
+	printk("MSR_AMD64_IBSBRTARGET %d %d\n", low, high);
 
+	rdmsr(MSR_AMD64_IBSOPCTL, low, high);
 	high = 0;
 	low &= ~IBS_OP_LOW_VALID_BIT;
 	low |= IBS_OP_LOW_ENABLE;
-	/* #if DUMP_OVERHEAD */
-	rdtscll(time_stop);
+*/	/* #if DUMP_OVERHEAD */
+	/* rdtscll(time_stop); */
 	/* per_cpu(stats, cpu).time_spent_in_NMI += time_stop - time_start; */
 	/* #endif */
 	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
@@ -289,7 +306,16 @@ __init ibs_measure_monitor_init( void )
 	printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
 	
 	printk("HR Timer module installing\n");
-/*	
+
+	if(!init_samples()){
+		printk(KERN_INFO "[%s] LIST INITIALIZATION FAILED !", __this_module.name);
+		return 1;
+	}
+	else{
+		printk(KERN_INFO "[%s] LIST INITIALIZATION SUCCESSFULL", __this_module.name);
+	}
+	
+/*		
 	thread1 = kthread_run(thread_fn, NULL, "ibs_monitor1");
 	if(IS_ERR(thread1))
 	{

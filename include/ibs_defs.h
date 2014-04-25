@@ -84,22 +84,22 @@ struct ibs_op_sample {
 	 unsigned int ibs_br_trg_high;
       };
       struct {
-         u64 ibs_op_rip;
-         u64 ibs_op_data1;
-         u64 ibs_op_data2;
-         u64 ibs_op_data3;
-         u64 ibs_dc_linear;
-         u64 ibs_dc_phys;
-	 u64 ibs_br_trg;
+         unsigned long long ibs_op_rip;
+         unsigned long long ibs_op_data1;
+         unsigned long long ibs_op_data2;
+         unsigned long long ibs_op_data3;
+         unsigned long long ibs_dc_linear;
+         unsigned long long ibs_dc_phys;
+	 unsigned long long ibs_br_trg;
       };
       struct {
-         u64 rip;
+         unsigned long long rip;
          IbsOpData_t data1;
          IbsOpData2_t data2;
          IbsOpData3_t data3;
-         u64 lin_addr;
-         u64 phys_addr;
-	 u64 br_target;
+         unsigned long long lin_addr;
+         unsigned long long phys_addr;
+	 unsigned long long br_target;
       };
    };
 };

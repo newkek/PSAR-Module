@@ -4,6 +4,18 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/cpumask.h>
+#include <linux/module.h>
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+#include <linux/kthread.h>
+#include <linux/sched.h>
+#include <linux/kallsyms.h>
+#include <asm/nmi.h>
+#include <asm/apic.h>
+#include <linux/cpu.h>
+#include <linux/freezer.h>
+
+#include "ibs_samples_management.h"
 
 #define MS_TO_NS(x)	(x * 1E6L)
 
