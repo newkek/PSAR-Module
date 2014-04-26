@@ -51,120 +51,6 @@ my_hrtimer_callback(struct hrtimer *timer)
 }
 
 
-
-
-
-
-static int
-ibs_cpu_notifier(struct notifier_block* b, unsigned long action, void* data)
-{
-	int cpu;
-	
-	cpu = (unsigned long)data;
-	printk("ibs_cpu_notifier\n");
-	      
-	/*switch (action) {
-	  case CPU_DOWN_FAILED:
-	  case CPU_ONLINE:
-	  smp_call_function_single(cpu, set_ibs_rate, NULL, 0);
-	  break;
-	  case CPU_DOWN_PREPARE:
-	  smp_call_function_single(cpu, ibs_stop, NULL, 1);
-	  break;
-	  }*/
-	return NOTIFY_DONE;
-}
-static struct notifier_block ibs_cpu_nb = { .notifier_call = ibs_cpu_notifier };
-
-
-int init_samples(void){
-	samples = create_list();
-	if(samples != NULL)
-		return 1; //successfull
-	return 0;
-
-
-}
-
-
-static inline void
-apic_init_ibs_nmi_per_cpu (void* args)
-{
-	unsigned long reg;
-	unsigned int  v;
-	
-
-	apic_write(APIC_LVTPC, APIC_DM_NMI);
-	
-	reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
-	v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
-	apic_write(reg, v);
-}
-
-
-
-
-
-static ibs_init(void){
-	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-	register_cpu_notifier(&ibs_cpu_nb);
-	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
-}
-
-
-
-
-static void
-set_ibs_rate(void *args)
-{
-	unsigned int low;
-	unsigned int high;
-	uint32_t rand;
-	
-	rand = high = 0;
-	
-	low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) \
-	  + ((1 & 0x1) << 19) /* bit 19 */
-	  + IBS_OP_LOW_ENABLE;
-	
-	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-}
-
-
-
-ibs_start_cpu(int cpu){
-	smp_call_function_single(cpu, set_ibs_rate, NULL, 1);
-}
-
-
-
-
-
-static inline void
-ibs_stop(void* args)
-{
-	unsigned int low;
-	unsigned int high;
-	
-	low = 0;
-	high = 0;
-	/* clear max count and enable */
-	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
-	return;
-}
-
-
-
-
-static void
-test(void* args){
-	printk("[test] CPU : %d\n", smp_processor_id());
-}
-
-
-
-
-
 static int
 handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 {
@@ -263,6 +149,117 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 
 
 
+static int
+ibs_cpu_notifier(struct notifier_block* b, unsigned long action, void* data)
+{
+	int cpu;
+	
+	cpu = (unsigned long)data;
+	printk("ibs_cpu_notifier\n");
+	      
+	/*switch (action) {
+	  case CPU_DOWN_FAILED:
+	  case CPU_ONLINE:
+	  smp_call_function_single(cpu, set_ibs_rate, NULL, 0);
+	  break;
+	  case CPU_DOWN_PREPARE:
+	  smp_call_function_single(cpu, ibs_stop, NULL, 1);
+	  break;
+	  }*/
+	return NOTIFY_DONE;
+}
+static struct notifier_block ibs_cpu_nb = { .notifier_call = ibs_cpu_notifier };
+
+
+int init_samples(void){
+	samples = create_list();
+	if(samples != NULL)
+		return 1; //successfull
+	return 0;
+
+
+}
+
+
+static inline void
+apic_init_ibs_nmi_per_cpu (void* args)
+{
+	unsigned long reg;
+	unsigned int  v;
+	
+
+	apic_write(APIC_LVTPC, APIC_DM_NMI);
+	
+	reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
+	v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
+	apic_write(reg, v);
+}
+
+
+
+
+
+static void 
+ibs_init(void){
+	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+	register_cpu_notifier(&ibs_cpu_nb);
+	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
+}
+
+
+
+
+static void
+set_ibs_rate(void *args)
+{
+	unsigned int low;
+	unsigned int high;
+	uint32_t rand;
+	
+	rand = high = 0;
+	
+	low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) \
+	  + ((1 & 0x1) << 19) /* bit 19 */
+	  + IBS_OP_LOW_ENABLE;
+	
+	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
+}
+
+
+
+static void 
+ibs_start_cpu(int cpu){
+	smp_call_function_single(cpu, set_ibs_rate, NULL, 1);
+}
+
+
+
+
+
+static void
+ibs_stop(void* args)
+{
+	unsigned int low;
+	unsigned int high;
+	
+	low = 0;
+	high = 0;
+	/* clear max count and enable */
+	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
+	return;
+}
+
+
+
+
+static void
+test(void* args){
+	printk("[test] CPU : %d\n", smp_processor_id());
+}
+
+
+
+
 static int 
 thread_fn(void* args){
 	
@@ -323,8 +320,8 @@ thread_fn2(void *args)
         schedule_timeout(5);
 
 
-	printk(KERN_INFO "in thread_fn2()");
-	on_each_cpu(ibs_stop, NULL, 1);
+	printk(KERN_INFO "in thread_fn2()\n");
+/*	on_each_cpu(ibs_stop, NULL, 1); */
 	do_exit(0);
 	return 0;
 }
@@ -380,7 +377,7 @@ __exit ibs_measure_monitor_cleanup( void )
   	int error;
 	
   	printk(KERN_INFO "HR Timer module uninstalling\n");
-/*
+
 	thread2 = kthread_run(thread_fn2, NULL, "ibs_monitor2");
 
 	if(IS_ERR(thread2))
@@ -388,7 +385,7 @@ __exit ibs_measure_monitor_cleanup( void )
 	        error = PTR_ERR(thread2);
 	        return;
 	}
-*/
+
 	if(samples != NULL)
 		kfree(samples);
 	return;
