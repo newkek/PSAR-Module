@@ -4,7 +4,7 @@
 /** Prototypes fonctions **/
 void init(Gestion* chain);
 void addSort(Gestion* gest, Process* current);
-void increase(Process* current);
-void decrease(Process* current, int* coef);
-void sortResult(Gestion* gest, Process* result, int* coef);
+void increase(struct task_struct* current);
+void decrease(struct task_struct* current, int* coef);
+void sortResult(Gestion* gest, struct task_struct* result, int* coef);
 void purge(Gestion* gest);

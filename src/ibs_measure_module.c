@@ -101,7 +101,20 @@ apic_init_ibs_nmi_per_cpu (void* args)
 	apic_write(reg, v);
 }
 
-static inline void
+
+
+
+
+static ibs_init(void){
+	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+	register_cpu_notifier(&ibs_cpu_nb);
+	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
+}
+
+
+
+
+static void
 set_ibs_rate(void *args)
 {
 	unsigned int low;
@@ -116,6 +129,15 @@ set_ibs_rate(void *args)
 	
 	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
 }
+
+
+
+ibs_start_cpu(int cpu){
+	smp_call_function_single(cpu, set_ibs_rate, NULL, 1);
+}
+
+
+
 
 
 static inline void
@@ -134,9 +156,9 @@ ibs_stop(void* args)
 
 
 
-static inline void
+static void
 test(void* args){
-	printk("CPU : %d", smp_processor_id());
+	printk("[test] CPU : %d\n", smp_processor_id());
 }
 
 
@@ -246,7 +268,7 @@ thread_fn(void* args){
 	
 	int count = 0;
 	struct ibs_op_sample op;
-	printk("[%s] thread launcher pid : %d\n", __this_module.name, current->pid);
+	printk("[%s] thread launcher pid : %d, cpu : %d\n", __this_module.name, current->pid, smp_processor_id());
 
 
         set_freezable();
@@ -257,19 +279,20 @@ thread_fn(void* args){
         schedule_timeout(5);
 
 
+	smp_call_function_single((smp_processor_id()+4)%47, test, NULL, 0);
 
-/*
 
-	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-	register_cpu_notifier(&ibs_cpu_nb);
-	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
+
+	/* MEASURES */
+	
+/*	ibs_init();
 	set_ibs_rate(NULL);
 */	
 
 
 	/* TESTS ON LIST */	
-	op.ibs_op_rip = 2;
-	op.ibs_op_data1=323445;
+/*	op.ibs_op_rip = 2;
+ 	op.ibs_op_data1=323445;
 	
 	add_to_queue(samples, op);
 	
@@ -278,7 +301,7 @@ thread_fn(void* args){
 		kfree(samples->next);
 	}
 	
-
+*/
 	do_exit(0);
 	
 	printk("Exit\n");
@@ -305,6 +328,7 @@ thread_fn2(void *args)
 	do_exit(0);
 	return 0;
 }
+
 
 
 

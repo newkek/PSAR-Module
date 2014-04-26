@@ -15,7 +15,7 @@ void init(Gestion* chain)				/* entrée: list des chaines */
 /** Param : ptr tab chaleur, ptr task_struct 	**/
 void addSort(Gestion* gest, Process* current)
 {
-	Gestion* new = malloc ( sizeof *new );
+	Gestion* new = kmalloc ( sizeof *new );
     if ( new != NULL )
     {
 		new->racine=current;
@@ -28,9 +28,12 @@ void addSort(Gestion* gest, Process* current)
 /** Param : ptr task_struct			**/
 void increase(Process* current)
 {
-	current->heat += INCR;
+/*	current->heat += INCR;
 	if(current->heat > LIST-1)
 		current->heat = LIST-1;
+*/	if(current->heat < LIST-1){
+		current->heat += INCR;
+	}
 }
 
 /** Decrementation compteur chaleur **/
@@ -66,7 +69,7 @@ void sortResult(Gestion* gest, Process* result, int* coef)
 {
 	int i, j=LIST-1;
 	int nbProc=0;
-	Gestion* current = malloc ( sizeof *current );
+	Gestion* current = kmalloc (sizeof(Gestion), GFP_KERNEL);
 	
 	current=NULL;
 	

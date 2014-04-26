@@ -10,7 +10,7 @@ typedef struct ProcessList{
 
 /** Pointeur sur task_struct et sur le maillon suivant **/
 typedef struct GestionList{
-	struct ProcessList* racine;
+	struct task_struct* racine;
 	struct GestionList* next;
 }Gestion;
 
