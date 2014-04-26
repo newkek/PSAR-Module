@@ -10,7 +10,7 @@ static struct hrtimer hr_timer;
 
 
 static struct task_struct* thread1, *thread2;
-
+static struct completion on_exit;
 
 static struct cpumask dst;
 
@@ -129,6 +129,9 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 	ibs_op.ibs_br_trg_high = high;
 	printk("MSR_AMD64_IBSBRTARGET %d %d\n", low, high);
 
+	ibs_op.cpu=cpu;
+
+	
 	add_to_queue(samples, ibs_op);
 
 
@@ -227,6 +230,8 @@ set_ibs_rate(void *args)
 
 
 
+
+
 static void 
 ibs_start_cpu(int cpu){
 	smp_call_function_single(cpu, set_ibs_rate, NULL, 1);
@@ -235,10 +240,9 @@ ibs_start_cpu(int cpu){
 
 
 
+static void 
+ibs_stop_cpu(void* args){
 
-static void
-ibs_stop(void* args)
-{
 	unsigned int low;
 	unsigned int high;
 	
@@ -247,6 +251,13 @@ ibs_stop(void* args)
 	/* clear max count and enable */
 	wrmsr(MSR_AMD64_IBSOPCTL, low, high);
 	return;
+
+}
+
+
+static void
+ibs_stop(unsigned int cpu){
+	smp_call_function_single(cpu, ibs_stop_cpu, NULL, 1);
 }
 
 
@@ -265,41 +276,78 @@ thread_fn(void* args){
 	
 	int count = 0;
 	struct ibs_op_sample op;
+	struct task_struct it;
+
+
 	printk("[%s] thread launcher pid : %d, cpu : %d\n", __this_module.name, current->pid, smp_processor_id());
 
-
+	/* SECURITIES FOR KERNEL THREAD */
         set_freezable();
-
         allow_signal(SIGKILL);
-
 	set_current_state(TASK_INTERRUPTIBLE);
         schedule_timeout(5);
 
 
-	smp_call_function_single((smp_processor_id()+4)%47, test, NULL, 0);
+	/* INIT FOR THE EXIT THREAD */
+	init_completion(&on_exit);
+	
+	/* SAMPLES INITIALIZATION */	
+	if(!init_samples()){
+		printk(KERN_INFO "[%s] LIST INITIALIZATION FAILED !\n", __this_module.name);
+		do_exit(0);
+		return 1;
+	}
+	else{
+		printk(KERN_INFO "[%s] LIST INITIALIZATION SUCCESSFULL\n", __this_module.name);
+	}
 
 
 
-	/* MEASURES */
+	/* INIT MEASURES */
 	
 /*	ibs_init();
-	set_ibs_rate(NULL);
 */	
 
 
-	/* TESTS ON LIST */	
-/*	op.ibs_op_rip = 2;
- 	op.ibs_op_data1=323445;
-	
-	add_to_queue(samples, op);
-	
-	if(samples->next != NULL){
-		printk("results : %lld %lld \n", samples->next->sample.ibs_op_rip, samples->next->sample.ibs_op_data1);
-		kfree(samples->next);
-	}
-	
-*/
-	do_exit(0);
+	do{
+
+		for_each_process(it){
+			if(it->state == TASK_RUNNING){
+				/* code eric : ajouter dans le tableau, mettre à jour sa chaleur */
+			}
+			else{
+				/*code eric : diminuer sa chaleur */
+			}
+			
+		}
+		count++;
+		if (count > measures_rate){
+			/* nouvelle phase de  mesures */
+
+
+			/* arrêter les mesures précédentes grace au tableau précédemment enregistré : */
+			/* pour chaque thread dans le tableau precedemment enregistré (t){
+				ibs_stop(t->cpu);
+			}
+			*/
+
+			/* code eric : récupérer le tableau des threads les plus chauds */
+
+			count = 0;
+
+			/* lancement de nouvelles mesures : */
+			/* pour chaque thread dans le tableau des threads les plus chauds  (t){
+				ibs_start(t->cpu);
+				
+			}
+			mémoriser le tableau pour arreter les mesures plus tard
+			*/
+		}
+		/* code eric : flush tableau */
+
+
+	} while(!kthread_should_stop());
+
 	
 	printk("Exit\n");
 	return 0;
@@ -312,16 +360,33 @@ thread_fn(void* args){
 static int
 thread_fn2(void *args)
 {
+
+	/* THREAD SECURITIES */
 	set_freezable();
-
 	allow_signal(SIGKILL);
-
         set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(5);
+        schedule_timeout(10);
 
 
 	printk(KERN_INFO "in thread_fn2()\n");
 /*	on_each_cpu(ibs_stop, NULL, 1); */
+
+	kthread_stop(thread1);
+
+	/* stopper les dernieres mesures lancees : */
+	/* pour chaque thread dans le tableau (t){
+		ibs_stop(t->cpu);
+	}
+	*/
+
+
+	/* retourner les data dans un fichier */	
+	/* free les data */
+
+
+	/* Allow module_exit to exit */
+	complete(&on_exit);
+
 	do_exit(0);
 	return 0;
 }
@@ -348,13 +413,6 @@ __init ibs_measure_monitor_init( void )
 	
 	printk("HR Timer module installing\n");
 
-	if(!init_samples()){
-		printk(KERN_INFO "[%s] LIST INITIALIZATION FAILED !\n", __this_module.name);
-		return 1;
-	}
-	else{
-		printk(KERN_INFO "[%s] LIST INITIALIZATION SUCCESSFULL\n", __this_module.name);
-	}
 	
 		
 	thread1 = kthread_run(thread_fn, NULL, "ibs_monitor1");
@@ -385,7 +443,7 @@ __exit ibs_measure_monitor_cleanup( void )
 	        error = PTR_ERR(thread2);
 	        return;
 	}
-
+	wait_for_completion(&on_exit);
 	if(samples != NULL)
 		kfree(samples);
 	return;

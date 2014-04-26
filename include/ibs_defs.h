@@ -100,6 +100,7 @@ struct ibs_op_sample {
          unsigned long long lin_addr;
          unsigned long long phys_addr;
 	 unsigned long long br_target;
+	 unsigned int cpu;
       };
    };
 };
