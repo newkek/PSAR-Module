@@ -6,29 +6,8 @@ MODULE_AUTHOR("Kévin Gallardo - Pierre-Yves Péneau");
 MODULE_DESCRIPTION("TODO");
 
 
-static struct hrtimer hr_timer;
-
-
-static struct task_struct* thread1, *thread2;
-static struct completion on_exit;
-
-static struct cpumask dst;
-
-
-static ktime_t kt_period;
-
-
-int keep_running;
-
-
-static char* options = "init";
 module_param(options, charp, 0000);
 MODULE_PARM_DESC(options, "Options for the numa monitoring");
-
-
-
-ibs_sample_list* samples;
-
 
 
 
@@ -49,6 +28,8 @@ my_hrtimer_callback(struct hrtimer *timer)
 	
 	return HRTIMER_RESTART;
 }
+
+
 
 
 static int
@@ -276,7 +257,7 @@ thread_fn(void* args){
 	
 	int count = 0;
 	struct ibs_op_sample op;
-	struct task_struct it;
+	struct task_struct *it;
 
 
 	printk("[%s] thread launcher pid : %d, cpu : %d\n", __this_module.name, current->pid, smp_processor_id());

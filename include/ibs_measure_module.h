@@ -24,7 +24,31 @@
 #define APIC_EILVT_LVTOFF_IBS          1
 #define APIC_EILVT0                    0x500
 
+unsigned int measures_rate;
+
+static struct hrtimer hr_timer;
+
+
+static struct task_struct* thread1, *thread2;
+static struct completion on_exit;
+
+static struct cpumask dst;
+
+
+static ktime_t kt_period;
+
+
+static char* options = "init";
+
+ibs_sample_list* samples;
+
+
+
 void (*cpuset_cpus_allowed)(struct task_struct* p, struct cpumask* mask);
+
+
+
+
 
 #endif /* _H_IBS_MEASURE_MODULE_ */
 
