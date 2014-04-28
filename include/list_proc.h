@@ -5,7 +5,7 @@
 typedef struct ProcessList{
 	int id;
 	int heat;
-	struct ProcessList* next;
+	int cpu;
 }Process;
 
 /** Pointeur sur task_struct et sur le maillon suivant **/

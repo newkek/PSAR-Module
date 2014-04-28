@@ -16,6 +16,10 @@
 #include <linux/freezer.h>
 
 #include "ibs_samples_management.h"
+#include "order.h"
+
+
+
 
 #define MS_TO_NS(x)	(x * 1E6L)
 
@@ -39,6 +43,8 @@ static ktime_t kt_period;
 
 
 static char* options = "init";
+
+static Process result_table[RESULT]; 
 
 ibs_sample_list* samples;
 

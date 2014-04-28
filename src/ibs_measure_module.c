@@ -255,11 +255,13 @@ test(void* args){
 static int 
 thread_fn(void* args){
 	
-	int count = 0;
+	int count = 0, i=0;
 	struct ibs_op_sample op;
 	struct task_struct *it;
+	Gestion heat_table[LIST];
+	unsigned int coef, flag=0;
 
-
+	
 	printk("[%s] thread launcher pid : %d, cpu : %d\n", __this_module.name, current->pid, smp_processor_id());
 
 	/* SECURITIES FOR KERNEL THREAD */
@@ -286,8 +288,12 @@ thread_fn(void* args){
 
 	/* INIT MEASURES */
 	
-/*	ibs_init();
+/*	ibs_init();	
 */	
+
+
+	/* INIT TABLE */
+	coef = 1;
 
 
 	do{
@@ -295,9 +301,11 @@ thread_fn(void* args){
 		for_each_process(it){
 			if(it->state == TASK_RUNNING){
 				/* code eric : ajouter dans le tableau, mettre à jour sa chaleur */
+				increase(it);
 			}
 			else{
 				/*code eric : diminuer sa chaleur */
+				decrease(it, &coef);
 			}
 			
 		}
@@ -311,10 +319,26 @@ thread_fn(void* args){
 				ibs_stop(t->cpu);
 			}
 			*/
-
+			if(flag){
+				for(i=0; i< RESULT; i++){
+					ibs_stop(result_table[i].cpu);
+				}
+				purge(heat_table);
+			}
+			else 
+				flag=1;
+			
+			
 			/* code eric : récupérer le tableau des threads les plus chauds */
+			for_each_process(it){
+				//add_in_table(&(heat_table[it->heat]), it);
 
+			}
 			count = 0;
+			
+			/*code eric : récupérer les threads les plus chauds dans un tableau */
+		
+			create_table_result(heat_table, result_table, &coef);
 
 			/* lancement de nouvelles mesures : */
 			/* pour chaque thread dans le tableau des threads les plus chauds  (t){
@@ -323,8 +347,12 @@ thread_fn(void* args){
 			}
 			mémoriser le tableau pour arreter les mesures plus tard
 			*/
+			for(i=0; i< RESULT; i++){
+				ibs_start_cpu(result_table[i].cpu);
+			}
+
+			/* code eric : flush tableau */
 		}
-		/* code eric : flush tableau */
 
 
 	} while(!kthread_should_stop());
@@ -341,6 +369,7 @@ thread_fn(void* args){
 static int
 thread_fn2(void *args)
 {
+	unsigned int i=0;
 
 	/* THREAD SECURITIES */
 	set_freezable();
@@ -355,10 +384,9 @@ thread_fn2(void *args)
 	kthread_stop(thread1);
 
 	/* stopper les dernieres mesures lancees : */
-	/* pour chaque thread dans le tableau (t){
-		ibs_stop(t->cpu);
+	for(i=0; i< RESULT; i++){
+		ibs_stop(result_table[i].cpu);
 	}
-	*/
 
 
 	/* retourner les data dans un fichier */	

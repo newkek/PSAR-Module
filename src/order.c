@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include "list_proc.h"
 #include "order.h"
 
 
@@ -13,12 +10,12 @@ void init(Gestion* chain)				/* entrée: list des chaines */
 
 /** Ajout maillon dans tab chaleur 				**/
 /** Param : ptr tab chaleur, ptr task_struct 	**/
-void addSort(Gestion* gest, Process* current)
+void add_in_table(Gestion* gest, struct task_struct* proc)
 {
-	Gestion* new = kmalloc ( sizeof *new );
+	Gestion* new = kmalloc(sizeof(Gestion), GFP_KERNEL);
     if ( new != NULL )
     {
-		new->racine=current;
+		new->racine=proc;
 		new->next=gest->next;
 		gest->next=new;
 	}
@@ -26,23 +23,23 @@ void addSort(Gestion* gest, Process* current)
 
 /** Incrementation compteur chaleur **/
 /** Param : ptr task_struct			**/
-void increase(Process* current)
+void increase(struct task_struct* proc)
 {
-/*	current->heat += INCR;
-	if(current->heat > LIST-1)
-		current->heat = LIST-1;
-*/	if(current->heat < LIST-1){
-		current->heat += INCR;
+/*	proc->heat += INCR;
+	if(proc->heat > LIST-1)
+		proc->heat = LIST-1;
+*/	if(proc->heat < LIST-1){
+		proc->heat += INCR;
 	}
 }
 
 /** Decrementation compteur chaleur **/
 /** Param : ptr task_struct			**/
-void decrease(Process* current, int* coef)
+void decrease(struct task_struct* proc, int* coef)
 {	
-	current->heat-=*coef;
-	if(current->heat <0)
-		current->heat = 0;
+	proc->heat-=*coef;
+	if(proc->heat <0)
+		proc->heat = 0;
 }
 
 /** Vide tab chaleur et libère les lises chainées 	**/
@@ -57,7 +54,7 @@ void purge(Gestion* gest)
 		for(it=gest[i].next ; it!=&(gest[i]) ; it=next)
 		{
 			next=it->next;
-			free(it);
+			kfree(it);
 		}
 		gest[i].next=&(gest[i]);
 	}
@@ -65,13 +62,13 @@ void purge(Gestion* gest)
 
 /** Stocker les elems les plus actifs 								**/
 /** Param : ptr tab chaleur, ptr tab result, ptr coef decremente	**/
-void sortResult(Gestion* gest, Process* result, int* coef)
+void create_table_result(Gestion* gest, Process* result, int* coef)
 {
 	int i, j=LIST-1;
 	int nbProc=0;
-	Gestion* current = kmalloc (sizeof(Gestion), GFP_KERNEL);
+	Gestion* proc = kmalloc (sizeof(Gestion), GFP_KERNEL);
 	
-	current=NULL;
+	proc=NULL;
 	
 	for(i=0 ; i<RESULT ; i++)
 	{
@@ -82,20 +79,26 @@ void sortResult(Gestion* gest, Process* result, int* coef)
 				
 			else
 			{
-				if(current==NULL)
+				if(proc==NULL)
 				{
-					current=gest[j].next;
-					result[i]=*(current->racine);
+					proc=gest[j].next;
+//					result[i]=*(proc->racine);
+					result[i].id = proc->racine->pid;
+					result[i].heat = proc->racine->heat;
+					result[i].cpu = proc->racine->cpu;
 				}
 				else
 				{
-					result[i]=*(current->next->racine);
-					current=current->next;
+					result[i].id = proc->next->racine->pid;
+					result[i].heat = proc->next->racine->heat;
+					result[i].cpu = proc->next->racine->cpu;
+//					result[i]=*(proc->next->racine);
+					proc=proc->next;
 				}
 					
-				if(current->next==gest+j)
+				if(proc->next==gest+j)
 				{
-					current=NULL;
+					proc=NULL;
 					j--;
 				}
 				
@@ -106,10 +109,10 @@ void sortResult(Gestion* gest, Process* result, int* coef)
 	
 	if(j==LIST-1)
 	{
-		while(current->next!=gest+j)
+		while(proc->next!=gest+j)
 		{
 			nbProc++;
-			current=current->next;
+			proc=proc->next;
 		}
 		
 		if((nbProc>(2*RESULT)) && (INCR<=(*coef+=1)))
