@@ -9,6 +9,7 @@ MODULE_DESCRIPTION("TODO");
 module_param(options, charp, 0000);
 MODULE_PARM_DESC(options, "Options for the numa monitoring");
 
+int my_cpu;
 
 enum hrtimer_restart
 my_hrtimer_callback(struct hrtimer *timer)
@@ -259,7 +260,6 @@ thread_fn(void* args){
   struct task_struct *it;
   Gestion heat_table[LIST];
   unsigned int coef, flag=0;
-
 	
   printk("[%s] thread launcher pid : %d, cpu : %d\n", __this_module.name, current->pid, smp_processor_id());
 
@@ -271,7 +271,7 @@ thread_fn(void* args){
 
 
   /* INIT FOR THE EXIT THREAD */
-  init_completion(&on_exit);
+  /* init_completion(&on_exit); */
 	
   /* SAMPLES INITIALIZATION */	
   if(!init_samples()){
@@ -287,77 +287,78 @@ thread_fn(void* args){
 
   /* INIT MEASURES */
 	
-  /*	ibs_init();	
-   */	
-
+  ibs_init();
+  my_cpu = smp_processor_id();
+  ibs_start_cpu(my_cpu);
 
   /* INIT TABLE */
   coef = 1;
 
 
-  do{
+  /* do{ */
 
-    for_each_process(it){
-      if(it->state == TASK_RUNNING){
-	/* code eric : ajouter dans le tableau, mettre à jour sa chaleur */
-	increase(it);
-      }
-      else{
-	/*code eric : diminuer sa chaleur */
-	decrease(it, &coef);
-      }
+  /*   for_each_process(it){ */
+  /*     if(it->state == TASK_RUNNING){ */
+  /* 	/\* code eric : ajouter dans le tableau, mettre à jour sa chaleur *\/ */
+  /* 	increase(it); */
+  /*     } */
+  /*     else{ */
+  /* 	/\*code eric : diminuer sa chaleur *\/ */
+  /* 	decrease(it, &coef); */
+  /*     } */
 			
-    }
-    count++;
-    if (count > measures_rate){
-      /* nouvelle phase de  mesures */
+  /*   } */
+  /*   count++; */
+  /*   if (count > measures_rate){ */
+  /*     /\* nouvelle phase de  mesures *\/ */
 
 
-      /* arrêter les mesures précédentes grace au tableau précédemment enregistré : */
-      /* pour chaque thread dans le tableau precedemment enregistré (t){
-	 ibs_stop(t->cpu);
-	 }
-      */
-      if(flag){
-	for(i=0; i< RESULT; i++){
-	  ibs_stop(result_table[i].cpu);
-	}
-	purge(heat_table);
-      }
-      else 
-	flag=1;
+  /*     /\* arrêter les mesures précédentes grace au tableau précédemment enregistré : *\/ */
+  /*     /\* pour chaque thread dans le tableau precedemment enregistré (t){ */
+  /* 	 ibs_stop(t->cpu); */
+  /* 	 } */
+  /*     *\/ */
+  /*     if(flag){ */
+  /* 	for(i=0; i< RESULT; i++){ */
+  /* 	  ibs_stop(result_table[i].cpu); */
+  /* 	} */
+  /* 	purge(heat_table); */
+  /*     } */
+  /*     else  */
+  /* 	flag=1; */
 			
 			
-      /* code eric : récupérer le tableau des threads les plus chauds */
-      for_each_process(it){
-	//add_in_table(&(heat_table[it->heat]), it);
+  /*     /\* code eric : récupérer le tableau des threads les plus chauds *\/ */
+  /*     for_each_process(it){ */
+  /* 	//add_in_table(&(heat_table[it->heat]), it); */
 
-      }
-      count = 0;
+  /*     } */
+  /*     count = 0; */
 			
-      /*code eric : récupérer les threads les plus chauds dans un tableau */
+  /*     /\*code eric : récupérer les threads les plus chauds dans un tableau *\/ */
 		
-      create_table_result(heat_table, result_table, &coef);
+  /*     create_table_result(heat_table, result_table, &coef); */
 
-      /* lancement de nouvelles mesures : */
-      /* pour chaque thread dans le tableau des threads les plus chauds  (t){
-	 ibs_start(t->cpu);
+  /*     /\* lancement de nouvelles mesures : *\/ */
+  /*     /\* pour chaque thread dans le tableau des threads les plus chauds  (t){ */
+  /* 	 ibs_start(t->cpu); */
 				
-	 }
-	 mémoriser le tableau pour arreter les mesures plus tard
-      */
-      for(i=0; i< RESULT; i++){
-	ibs_start_cpu(result_table[i].cpu);
-      }
+  /* 	 } */
+  /* 	 mémoriser le tableau pour arreter les mesures plus tard */
+  /*     *\/ */
+  /*     for(i=0; i< RESULT; i++){ */
+  /* 	ibs_start_cpu(result_table[i].cpu); */
+  /*     } */
 
-      /* code eric : flush tableau */
-    }
+  /*     /\* code eric : flush tableau *\/ */
+  /*   } */
 
 
-  } while(!kthread_should_stop());
+  /* } while(!kthread_should_stop()); */
 
-	
+
   printk("Exit\n");
+  do_exit(0);
   return 0;
 }
 
@@ -380,20 +381,22 @@ thread_fn2(void *args)
   printk(KERN_INFO "in thread_fn2()\n");
   /*	on_each_cpu(ibs_stop, NULL, 1); */
 
-  kthread_stop(thread1);
+  /* kthread_stop(thread1); */
 
   /* stopper les dernieres mesures lancees : */
-  for(i=0; i< RESULT; i++){
-    ibs_stop(result_table[i].cpu);
-  }
+  /* for(i=0; i< RESULT; i++){ */
+  /*   ibs_stop(result_table[i].cpu); */
+  /* } */
 
 
   /* retourner les data dans un fichier */	
   /* free les data */
 
 
+  ibs_stop(my_cpu);
+  
   /* Allow module_exit to exit */
-  complete(&on_exit);
+  /* complete(&on_exit); */
 
   do_exit(0);
   return 0;
@@ -451,7 +454,7 @@ __exit ibs_measure_monitor_cleanup( void )
       error = PTR_ERR(thread2);
       return;
     }
-  wait_for_completion(&on_exit);
+  /* wait_for_completion(&on_exit); */
   if(samples != NULL)
     kfree(samples);
   return;

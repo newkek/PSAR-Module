@@ -28,7 +28,9 @@ void increase(struct task_struct* proc)
   /*	proc->heat += INCR;
 	if(proc->heat > LIST-1)
 	proc->heat = LIST-1;
-  */	if(proc->heat < LIST-1){
+  */	
+
+  if(proc->heat < LIST-1){
     proc->heat += INCR;
   }
 }
