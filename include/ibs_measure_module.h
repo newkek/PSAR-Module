@@ -23,8 +23,15 @@
 
 #define MS_TO_NS(x)	(x * 1E6L)
 
+#define IBS_MAX_CNT                    (1ULL<<20)      /* bit 20 */
+
+/* 0: cycle based */
+/* 1: op based */
+#define IBS_OP_METHOD                  (0ULL<<19)      /* bit 19 */
+
 #define IBS_OP_LOW_VALID_BIT           (1ULL<<18)      /* bit 18 */
 #define IBS_OP_LOW_ENABLE              (1ULL<<17)      /* bit 17 */
+
 #define APIC_EILVT_LVTOFF_IBS          1
 #define APIC_EILVT0                    0x500
 

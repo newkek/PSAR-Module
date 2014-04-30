@@ -173,10 +173,12 @@ apic_init_ibs_nmi_per_cpu (void* args)
 	
 
   apic_write(APIC_LVTPC, APIC_DM_NMI);
-	
+  
   reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
   v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
   apic_write(reg, v);
+
+
 }
 
 
@@ -186,8 +188,8 @@ apic_init_ibs_nmi_per_cpu (void* args)
 static void 
 ibs_init(void){
   on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-  register_cpu_notifier(&ibs_cpu_nb);
   register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
+  register_cpu_notifier(&ibs_cpu_nb);
 }
 
 
@@ -199,13 +201,25 @@ set_ibs_rate(void *args)
   unsigned int low;
   unsigned int high;
   uint32_t rand;
-	
+  int ops;
+
+  ops = 1;
+  printk("ibs_start_cpu: CPU n°%d\n", smp_processor_id() );
+
   rand = high = 0;
 	
-  low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) \
-    + ((1 & 0x1) << 19) /* bit 19 */
-    + IBS_OP_LOW_ENABLE;
+  /* bit 19 */
+  /* 0001 1111 1111 1111 0000 >> 4 -> que des 1 sauf trois 0 au début #TasVu */
+
+  /* low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) /\* Les 16 premiers bits *\/ */
+  /*   + ((ops & 0x1) << 19) /\* le bit 19 *\/ */
+  /*   + IBS_OP_LOW_ENABLE;  /\* le bit 17 *\/ */
 	
+  low =  IBS_MAX_CNT +
+    + IBS_OP_METHOD +
+    + IBS_OP_LOW_ENABLE;
+
+  /* Wesh ma gueule on écrit */
   wrmsr(MSR_AMD64_IBSOPCTL, low, high);
 }
 
@@ -215,6 +229,7 @@ set_ibs_rate(void *args)
 
 static void 
 ibs_start_cpu(int cpu){
+  printk("ibs_start_cpu: CPU n°%d\n", cpu);
   smp_call_function_single(cpu, set_ibs_rate, NULL, 1);
 }
 
@@ -271,7 +286,7 @@ thread_fn(void* args){
 
 
   /* INIT FOR THE EXIT THREAD */
-  /* init_completion(&on_exit); */
+  init_completion(&on_exit);
 	
   /* SAMPLES INITIALIZATION */	
   if(!init_samples()){
@@ -293,7 +308,6 @@ thread_fn(void* args){
 
   /* INIT TABLE */
   coef = 1;
-
 
   /* do{ */
 
@@ -392,11 +406,10 @@ thread_fn2(void *args)
   /* retourner les data dans un fichier */	
   /* free les data */
 
-
   ibs_stop(my_cpu);
   
   /* Allow module_exit to exit */
-  /* complete(&on_exit); */
+  complete(&on_exit);
 
   do_exit(0);
   return 0;
@@ -454,7 +467,7 @@ __exit ibs_measure_monitor_cleanup( void )
       error = PTR_ERR(thread2);
       return;
     }
-  /* wait_for_completion(&on_exit); */
+  wait_for_completion(&on_exit);
   if(samples != NULL)
     kfree(samples);
   return;
