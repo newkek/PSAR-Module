@@ -50,8 +50,6 @@ my_hrtimer_callback(struct hrtimer *timer)
 
 
 
-
-
 static int
 ibs_cpu_notifier(struct notifier_block* b, unsigned long action, void* data)
 {
@@ -59,26 +57,11 @@ ibs_cpu_notifier(struct notifier_block* b, unsigned long action, void* data)
 
   cpu = (unsigned long)data;
   printk("ibs_cpu_notifier\n");
-	
-  /*switch (action) {
-    case CPU_DOWN_FAILED:
-    case CPU_ONLINE:
-    smp_call_function_single(cpu, set_ibs_rate, NULL, 0);
-    break;
-    case CPU_DOWN_PREPARE:
-    smp_call_function_single(cpu, ibs_stop, NULL, 1);
-    break;
-    }*/
   return NOTIFY_DONE;
 }
 
 
-
-
 static struct notifier_block ibs_cpu_nb = { .notifier_call = ibs_cpu_notifier };
-
-
-
 
 static inline void
 apic_init_ibs_nmi_per_cpu (void* args)
@@ -87,8 +70,6 @@ apic_init_ibs_nmi_per_cpu (void* args)
   unsigned int  v;
 
   apic_write(APIC_LVTPC, APIC_DM_NMI);
-  
-
 
   reg = (APIC_EILVT_LVTOFF_IBS << 4) + APIC_EILVT0;
   v = (0 << 16) | (APIC_EILVT_MSG_NMI << 8) | 0;
@@ -101,17 +82,12 @@ set_ibs_rate(void *args)
   unsigned int low;
   unsigned int high;
   uint32_t rand;
-
-  /* Experimental line */
-  used_cpu = smp_processor_id();
-
+  
   rand = high = 0;
 
   low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) \
     + ((1 & 0x1) << 19) /* bit 19 */
     + IBS_OP_LOW_ENABLE;
-
-
 
   wrmsr(MSR_AMD64_IBSOPCTL, low, high);
 }
@@ -148,7 +124,6 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 
   /* per_cpu(stats, cpu).total_interrupts++; */
   rdmsr(MSR_AMD64_IBSOPCTL, low, high);
-  printk(KERN_INFO "this is a test");
   if (low & IBS_OP_LOW_VALID_BIT)
     {
       rdmsr(MSR_AMD64_IBSOPDATA2, low, high);
@@ -222,12 +197,17 @@ thread_fnn(void* args)
   set_freezable();
   allow_signal(SIGKILL);
   set_current_state(TASK_INTERRUPTIBLE);
-  schedule_timeout(5);
+  schedule_timeout(2);
 
-  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+  /* Experimental lines */
+  used_cpu = smp_processor_id();
+  printk("Sampling is start on cpu %d\n", used_cpu);
+
+  /* on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1); */
+  apic_init_ibs_nmi_per_cpu(NULL);
   register_cpu_notifier(&ibs_cpu_nb);
   register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
-
+  /* start sampling */
   set_ibs_rate(NULL);
 
   printk("Init sampling: ok\n");
@@ -235,62 +215,6 @@ thread_fnn(void* args)
 
   return 0;
 }
-
-
-int
-thread_fn(void * args)
-{
-  u64 i;
-  struct thread_info *ti;
-  struct task_struct *tak __attribute__((unused));
-
-  set_freezable();
-
-  allow_signal(SIGKILL);
-
-
-
-  i = 0;
-  cpumask_clear(&dst);
-  cpumask_set_cpu(24, &dst);
-  ti = current_thread_info();
-  /* sched_setaffinity(0, &dst); */
-  cpuset_cpus_allowed(current, &dst);
-printk("Thread1 pid = %d\n", current->pid);
-  /* while ( i < 5 ) */
-  /*   { */
-      printk("In thread1, cpu : %d\n", ti->cpu); 
-  /*     printk("nb online cpus : %d\n", num_online_cpus()); */
-  /*     i++; */
-  /*     schedule(); */
-  /*   } */
-	
-  /* while (keep_running) */
-  /*   { */
-  /*     printk("round %d : running tasks : "); */
-  /*     for_each_process(tak) */
-  /*     { */
-  /* 	if(tak->state == TASK_RUNNING) */
-  /* 	  printk("%d - ", tak-> pid);	 */
-  /*     } */
-  /*     printk("\n"); */
-  /*     i++; */
-  /*     schedule(); */
-
-  /*   } */
-
-  /* per CPU INIT 
-  printk(KERN_INFO "In thread 1");
-  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-  register_cpu_notifier(&ibs_cpu_nb);
-  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
-  set_ibs_rate(NULL);
-*/
-  printk("Out of thread1\n");
-  do_exit(0);
-  return 0;
-}
-
 
 
 
@@ -303,10 +227,11 @@ thread_fn2(void *args)
   set_freezable();
   allow_signal(SIGKILL);
   set_current_state(TASK_INTERRUPTIBLE);
-  schedule_timeout(5);
+  schedule_timeout(2);
 
   /* Write on MSR only on used cpu */
-  /* This line is experimental */
+  /* Experimental */
+  printk("Trying to stop sampling on cpu %d\n", used_cpu);
   smp_call_function_single(used_cpu, ibs_stop, NULL, 1);
   
   printk("Sampling stopped: ok\n");
@@ -314,7 +239,6 @@ thread_fn2(void *args)
   do_exit(0);
   return 0;
 }
-
 
 
 static int
@@ -330,13 +254,14 @@ __init ibs_measure_monitor_init( void )
 	
   printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
 	
-  thread1 = kthread_run(thread_fnn, NULL, "thread_launch");
+  thread1 = kthread_run(thread_fnn, NULL, "thread_");
   if(IS_ERR(thread1))
     {
       error = PTR_ERR(thread1);
       return error;
     }
-	
+
+  printk("Module init ok\n");
   return 0;
 }
 
@@ -344,15 +269,14 @@ static void
 __exit ibs_measure_monitor_cleanup( void )
 {
   int error;
-	
-  thread2 = kthread_run(thread_fn2, NULL, "thread_stop");
+
+  thread2 = kthread_run(thread_fn2, NULL, "thread_");
   if(IS_ERR(thread2))
     {
       error = PTR_ERR(thread2);
       return;
     }
   return;
-	
 }
 
 module_init(ibs_measure_monitor_init);
