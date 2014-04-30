@@ -25,7 +25,7 @@ static struct cpumask dst;
 static ktime_t kt_period;
 
 int keep_running;
-
+int used_cpu;
 enum hrtimer_restart
 
 
@@ -102,11 +102,16 @@ set_ibs_rate(void *args)
   unsigned int high;
   uint32_t rand;
 
+  /* Experimental line */
+  used_cpu = smp_processor_id();
+
   rand = high = 0;
 
   low = (((0x1FFF0 + rand) >> 4) & 0xFFFF) \
     + ((1 & 0x1) << 19) /* bit 19 */
     + IBS_OP_LOW_ENABLE;
+
+
 
   wrmsr(MSR_AMD64_IBSOPCTL, low, high);
 }
@@ -208,42 +213,27 @@ handle_ibs_nmi(unsigned int cmd, struct pt_regs* const regs)
 }
 
 
-static int thread_fnn(void* args){
-	
-	int count = 0;
+static int
+thread_fnn(void* args)
+{
+  printk("Init sampling...\n");
 
-	printk("current pid : %d\n", current->pid);
+  /* Set securities for the thread */
+  set_freezable();
+  allow_signal(SIGKILL);
+  set_current_state(TASK_INTERRUPTIBLE);
+  schedule_timeout(5);
 
-        set_freezable();
+  on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
+  register_cpu_notifier(&ibs_cpu_nb);
+  register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
 
-        allow_signal(SIGKILL);
+  set_ibs_rate(NULL);
 
-//        do {
-                set_current_state(TASK_INTERRUPTIBLE);
-                schedule_timeout(5);
+  printk("Init sampling: ok\n");
+  do_exit(0);
 
-
-
-		/* BODY */
-                count ++;
-  /*              if(count >= 100)
-                {
-                        printk("count is overflow 100, reset\n");
-                        count = 0;
-                }
-*/		/* \BODY */
-
-
-//        } while(!kthread_should_stop());
-	on_each_cpu(apic_init_ibs_nmi_per_cpu, NULL, 1);
-	register_cpu_notifier(&ibs_cpu_nb);
-	register_nmi_handler(NMI_LOCAL, handle_ibs_nmi, 0, "psar");
-	set_ibs_rate(NULL);
-	
-	do_exit(0);
-	
-	printk("Exit\n");
-	return 0;
+  return 0;
 }
 
 
@@ -304,74 +294,64 @@ printk("Thread1 pid = %d\n", current->pid);
 
 
 
-
-
-
 static int
 thread_fn2(void *args)
 {
-	set_freezable();
+  printk("Stop sampling...\n");
 
-	allow_signal(SIGKILL);
+  /* Set securities for the thread */
+  set_freezable();
+  allow_signal(SIGKILL);
+  set_current_state(TASK_INTERRUPTIBLE);
+  schedule_timeout(5);
 
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(5);
+  /* Write on MSR only on used cpu */
+  /* This line is experimental */
+  smp_call_function_single(used_cpu, ibs_stop, NULL, 1);
+  
+  printk("Sampling stopped: ok\n");
 
-
-	printk(KERN_INFO "in thread_fn2()");
-	on_each_cpu(ibs_stop, NULL, 1);
-	do_exit(0);
-	return 0;
+  do_exit(0);
+  return 0;
 }
-
-
 
 
 
 static int
 __init ibs_measure_monitor_init( void )
 {
-	printk("thread1 launched\n");
-	/* ktime_t ktime; */
-	unsigned long delay_in_ms;
-	unsigned long sym_addr;
-	char* sym_name = "cpuset_cpus_allowed";
-	char name[8] = "thread1";
-	int error;
-	delay_in_ms = 1000L;
-	sym_addr = kallsyms_lookup_name(sym_name);
+  int error;
+  unsigned long delay_in_ms;
+  unsigned long sym_addr;
+  char* sym_name = "cpuset_cpus_allowed";
+
+  delay_in_ms = 1000L;
+  sym_addr = kallsyms_lookup_name(sym_name);
 	
-	printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
-	//cpuset_cpus_allowed = sym_addr;
+  printk(KERN_INFO "[%s] %s (0x%lx)\n", __this_module.name, sym_name, sym_addr);
 	
-	//if ( !cpuset_cpus_allowed )
-	  //return -1;
+  thread1 = kthread_run(thread_fnn, NULL, "thread_launch");
+  if(IS_ERR(thread1))
+    {
+      error = PTR_ERR(thread1);
+      return error;
+    }
 	
-	printk("HR Timer module installing\n");
-	
-	thread1 = kthread_run(thread_fnn, NULL, "ExampleThread");
-	if(IS_ERR(thread1))
-	{
-	        error = PTR_ERR(thread1);
-	        return error;
-	}
-	
-	return 0;
+  return 0;
 }
 
 static void
 __exit ibs_measure_monitor_cleanup( void )
 {
-  	int error;
+  int error;
 	
-  	printk(KERN_INFO "HR Timer module uninstalling\n");
-	thread2 = kthread_run(thread_fn2, NULL, "ExampleThread");
-	if(IS_ERR(thread2))
-	{
-	        error = PTR_ERR(thread2);
-	        return;
-	}
-	return;
+  thread2 = kthread_run(thread_fn2, NULL, "thread_stop");
+  if(IS_ERR(thread2))
+    {
+      error = PTR_ERR(thread2);
+      return;
+    }
+  return;
 	
 }
 
